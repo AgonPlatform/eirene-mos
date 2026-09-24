@@ -81,4 +81,4 @@ BYTE	SD_writeBlocks_API(SD_safe_access * addr_w_code, BYTE *buf, WORD count) {
 	return SD_writeBlocks(addr_w_code->address, buf, count);
 }
 
-#endif SD_H
+#endif /* SD_H */
