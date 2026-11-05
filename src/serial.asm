@@ -16,6 +16,11 @@
 
 			.ASSUME	ADL = 1
 			
+			.bss
+uart0_tx_data_pos:		.ds 3
+uart0_tx_data_count:		.ds 3
+uart0_tx_callback: 		.ds 5	; call + 3 bytes + ret OR sis-prefix + call + 2 bytes + ret
+
 			.text
 			
 			XDEF	UART0_serial_TX
@@ -33,6 +38,8 @@
 			
 			XDEF	putch 		
 			XDEF	getch 
+		 	XDEF	fill_uart0_tx_fifo
+			XDEF	uart0_async_send
 
 			XREF	_serialFlags	; In globals.asm
 				
@@ -278,3 +285,105 @@ getch:			PUSH	IY				; Standard C prologue
 			LD 	SP, IY				; Standard epilogue
 			POP	IY
 			RET
+
+			.macro WAIT_CTS
+			1:
+				in0 a,(PD_DR)
+				tst a,8
+				jr nz,1b
+			.endm
+
+
+; hl:data, bc:length, de:completion callback
+uart0_async_send:
+			ld (uart0_tx_data_pos),hl
+			ld (uart0_tx_data_count),bc
+
+			ld a,mb
+			or a
+			jr nz,.setup_z80_uart0_callback
+
+			; Setup ADL callback (no call (hl))
+			ld hl,uart0_tx_callback
+			ld a,0xcd  ; CALL
+			ld (hl),a
+			inc hl
+			ld (hl),de
+			inc hl
+			inc hl
+			inc hl
+			ld a,0xc9  ; RET
+			ld (hl),a
+			jr 1f
+
+		.setup_z80_uart0_callback:
+			; Setup Z80 mixed-mode callback (no call (hl))
+			ld hl,uart0_tx_callback
+			ld a,0x40  ; SIS prefix
+			ld (hl),a
+			inc hl
+			ld a,0xcd  ; CALL
+			ld (hl),a
+			inc hl
+			ld (hl),e
+			inc hl
+			ld (hl),d
+			inc hl
+			ld a,0xc9  ; RET
+			ld (hl),a
+
+		1:
+			; enable FIFO-empty interrupt on uart0
+			in0 a,(UART0_IER)
+			or 2
+			out0 (UART0_IER),a
+			ret
+
+; Interrupt-driven UART0 transmission
+fill_uart0_tx_fifo:
+			push bc
+			push de
+			push hl
+
+			ld bc,16
+			ld hl,(uart0_tx_data_count)
+			or a
+			sbc hl,bc
+
+			jr z,.last_fill
+			jr c,.last_fill
+
+			; send 16 bytes
+			ld (uart0_tx_data_count),hl
+			ld hl,(uart0_tx_data_pos)
+			ld de,UART0_THR
+			WAIT_CTS
+			otirx
+			ld (uart0_tx_data_pos),hl
+			pop hl
+			pop de
+			pop bc
+			pop af	; saved by _uart0_handler
+			ei
+			reti.lil
+
+		.last_fill:
+			; send <=16 final bytes
+			ld bc,(uart0_tx_data_count)
+			ld hl,(uart0_tx_data_pos)
+			ld de,UART0_THR
+			WAIT_CTS
+			otirx
+
+			; disable interrupt since send is finished
+			in0 a,(UART0_IER)
+			and 0xfd
+			out0 (UART0_IER),a
+
+			call uart0_tx_callback
+			pop hl
+			pop de
+			pop bc
+			pop af	; saved by _uart0_handler
+			ei
+			reti.lil
