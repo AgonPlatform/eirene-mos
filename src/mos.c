@@ -47,6 +47,7 @@
 #include "defines.h"
 #include "mos.h"
 #include "config.h"
+#include "keyboard_buffer.h"
 #include "mos_editor.h"
 #include "uart.h"
 #include "clock.h"
@@ -268,6 +269,7 @@ char * mos_trim(char * s, bool removeLeadingAsterisks, bool removeTrailingSpaces
 }
 
 int mos_runBin(UINT24 addr, char * args) {
+	kbuf_clear();
 	UINT8 mode = mos_execMode((UINT8 *)addr);
 	switch (mode) {
 		case 0:		// Z80 mode
@@ -1250,6 +1252,7 @@ int mos_cmdJMP(char *ptr) {
 	}
 	dest = (void *)addr;
 	dest();
+	kbuf_clear();
 	return 0;
 }
 

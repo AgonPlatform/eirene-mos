@@ -39,6 +39,7 @@
 			XREF	SET_ABC24
 			XREF	SET_AIX24
 
+			XREF	kbuf_remove
 			XREF	_mos_OSCLI		; In mos.c
 			XREF	_mos_EDITLINE
 			XREF	_mos_LOAD_API
@@ -261,7 +262,7 @@ mos_api_block1_start:	DW	mos_api_getkey		; 0x00
 
 			DW	mos_api_not_implemented	; 0x60
 			DW	mos_api_not_implemented	; 0x61
-			DW	mos_api_not_implemented	; 0x62
+			DW	mos_api_pollkeyboardevent ; 0x62
 			DW	mos_api_not_implemented	; 0x63
 			DW	mos_api_not_implemented	; 0x64
 			DW	mos_api_not_implemented	; 0x65
@@ -847,6 +848,28 @@ mos_api_setkbvector:	PUSH	DE
 ; IXU: Base address of the keymap
 ;
 mos_api_getkbmap:	LD	IX, _keymap
+			RET
+
+; Pop next event from keyboard buffer, copying to user buffer.
+;   DEU - Address of 4-byte buffer to write the event to
+; Return:
+;   A=0 IF no event
+;   A=1 IF event
+;   (DE+0) - Event ASCII value
+;   (DE+1) - Event keymods (alt, ctrl, etc)
+;   (DE+2) - Event FabGL vkey
+;   (DE+3) - 0=Key Up, 1=Key Down
+mos_api_pollkeyboardevent:
+			PUSH	BC
+			PUSH	DE
+			PUSH	HL
+			CALL	kbuf_remove
+			POP	HL
+			POP	DE
+			POP	BC
+			LD	A,1
+			RET	NZ
+			XOR	A
 			RET
 
 ; Open the I2C bus as master
