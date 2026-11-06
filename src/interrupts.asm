@@ -26,6 +26,7 @@
 			
 			XREF	UART0_serial_RX
 			XREF	UART0_serial_TX
+			XREF	fill_uart0_tx_fifo
 			XREF	mos_api
 			XREF	vdp_protocol			
 			
@@ -61,6 +62,15 @@ _vblank_handler:	DI
 ;
 _uart0_handler:		DI
 			PUSH		AF
+			; examine interrupt identification register to see if it's
+			; a fifo-empty interrupt
+			in0 a,(UART0_IIR)
+			and 0xe
+			cp 2
+			; Is a fifo-empty interrupt
+			jp z,fill_uart0_tx_fifo
+
+			; Receive-data-ready interrupt
 			PUSH		BC
 			PUSH		DE
 			PUSH		HL
